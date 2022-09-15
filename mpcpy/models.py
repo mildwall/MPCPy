@@ -1118,6 +1118,7 @@ class Modelica(_Model, utility._FMU, utility._Building):
                     par_vals[par].append(self.parameter_data[par]['Value'].display_data())
             # Estimate for each sample
             J = float('inf');
+            RMSE_com = float('inf')
             par_best = dict();
             glo_est_data = dict()
             if use_initial_values:
@@ -1136,24 +1137,27 @@ class Modelica(_Model, utility._FMU, utility._Building):
                 self._parameter_estimate_method._estimate(self);
                 # Validate estimate for iteration
                 self.validate(start_time, final_time, 'validate', plot = 0);
+                rmse_sum=0
                 # Save RMSE for initial_guess
                 for key in self.RMSE:
                     glo_est_data[i]['RMSE_{0}'.format(key)] = self.RMSE[key].display_data();
+                    rmse_sum=rmse_sum+self.RMSE[key].display_data()
+                glo_est_data[i]['RMSE_sum']=rmse_sum
                 # If solve succeeded, compare objective and if less, save best par values
                 solver_message = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[0]
                 J_curr = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[2]
                 glo_est_data[i]['Message'] = solver_message
                 glo_est_data[i]['J'] = J_curr
-                if ((J_curr < J) and (J_curr > 0.0)) or ((J_curr < J) and (solver_message == 'Solve_Succeeded')):
-                    J = J_curr;
+                if ((rmse_sum < RMSE_com) and (rmse_sum >= 0.0)):
+                    RMSE_com = rmse_sum;
                     for par in free_pars:
                         par_best[par] = self.parameter_data[par]['Value'].display_data();
             # Save all estimates
-            glo_est_data['J_Best'] = J
+            glo_est_data['RMSE_Best'] = RMSE_com
             self.glo_est_data = glo_est_data
             # Set best parameters in model if found
             if par_best:
-                for par in par_vals.keys():
+                for par in free_pars:
                     self.parameter_data[par]['Value'].set_data(par_best[par]);
         
     def state_estimate(self, start_time, final_time, measurement_variable_list):
