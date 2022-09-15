@@ -223,16 +223,21 @@ class _Validate(utility._mpcpyPandas):
             estimated_measurement = Model.measurements[key]['Simulated'];
             estimated_measurement.set_display_unit(estimated_measurement.get_base_unit());
             measurement.display_data(tz_name = Model.tz_name)[Model.start_time:Model.final_time].plot( \
-                   label = key+'_measured', linewidth = 2.0, linestyle = '-', rot = 90);
+                   label = key+'_measured', linewidth = 1.0, linestyle = '-', rot = 90);
             estimated_measurement.display_data()[Model.start_time:Model.final_time].plot( \
-                   label = key+'_estimated', linewidth = 2.0, linestyle = '--', rot = 90);
+                   label = key+'_estimated', linewidth = 1.0, linestyle = '--', rot = 90);
             plt.xlabel('Time (hr)');
             yname = measurement.quantity_name;
             yunit = measurement.get_display_unit_name();
             plt.ylabel(yname + ' [' + yunit + ']');
-            plt.rcParams.update({'font.size': 16});
             plt.legend();
             plt.savefig(validate_filename + '_' + key + '.png');
+            
+            # Save data
+            df_measurement=measurement.display_data(tz_name = Model.tz_name)[Model.start_time:Model.final_time]
+            df_estimated=estimated_measurement.display_data()[Model.start_time:Model.final_time]
+            df_measurement.to_pickle(validate_filename + '_' + key + '_mea.pkl')
+            df_estimated.to_pickle(validate_filename + '_' + key + '_est.pkl')
 
 #%% OccupancyModelMethod Interface
 class _OccupancyMethod(utility._mpcpyPandas):
