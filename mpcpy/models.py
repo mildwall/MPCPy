@@ -62,6 +62,7 @@ Occupancy Methods
 """
 
 from abc import ABCMeta, abstractmethod
+from typing import final
 import numpy as np
 from matplotlib import pyplot as plt
 import pandas as pd
@@ -230,6 +231,7 @@ class _Validate(utility._mpcpyPandas):
             yname = measurement.quantity_name;
             yunit = measurement.get_display_unit_name();
             plt.ylabel(yname + ' [' + yunit + ']');
+            plt.title('RMSE={}, Date: {}-{}'.format(Model.RMSE[key].display_data(),Model.start_time.day,Model.final_time.day))
             plt.legend();
             plt.savefig(validate_filename + '_' + key + '.png');
             
