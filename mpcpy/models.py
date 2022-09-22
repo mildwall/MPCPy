@@ -464,6 +464,9 @@ class JModelicaState(_ParameterEstimate):
         self._replace_parameter_data(Model)
         # Instantiate state estimation optimization problem
         self.opt_problem = optimization.Optimization(Model, optimization._ParameterEstimate, optimization.JModelica, {});
+        opt_options = self.opt_problem.get_optimization_options();
+        opt_options['IPOPT_options']['linear_solver'] = 'ma27'
+        self.opt_problem.set_optimization_options(opt_options)
         # Restore original parameter data
         self._restore_parameter_data(Model)
         
