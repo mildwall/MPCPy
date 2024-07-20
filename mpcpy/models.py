@@ -1086,13 +1086,13 @@ class Modelica(_Model, utility._FMU, utility._Building):
         free = False;
         for key in self.parameter_data.keys():
             if self.parameter_data[key]['Free'].get_base_data():
-                free = True;
+                free = True
                 break
             else:
-                free = False;
+                free = False
         if not free:
             # If none free raise error
-            raise ValueError('No parameters set as "Free" in parameter_data dictionary. Cannot run parameter estimation.');
+            raise ValueError('No parameters set as "Free" in parameter_data dictionary. Cannot run parameter estimation.')
         # Check for measurements
         for meas in measurement_variable_list:
             if meas not in self.measurements.keys():
@@ -1101,38 +1101,39 @@ class Modelica(_Model, utility._FMU, utility._Building):
         if start_time == 'continue':
             raise ValueError('"continue" is not a valid entry for start_time for parameter estimation problems.')
         # Perform parameter estimation
-        self._set_time_interval(start_time, final_time);
-        self.measurement_variable_list = measurement_variable_list;
+        self._set_time_interval(start_time, final_time)
+        self.measurement_variable_list = measurement_variable_list
         # Without global start
         if not global_start:
-            self._parameter_estimate_method._estimate(self);
+            self._parameter_estimate_method._estimate(self)
         # With global start
         else:
             # Detect free parameters
-            free_pars = [];
+            free_pars = []
             for par in self.parameter_data.keys():
                 if self.parameter_data[par]['Free'].display_data():
                     free_pars.append(par)
             # Create lhs sample for all parameters
             np.random.seed(seed)  # Random seed for LHS initialization
-            n_free_pars = len(free_pars);
-            lhs = doe.lhs(n_free_pars, samples=global_start, criterion='c');
+            n_free_pars = len(free_pars)
+            lhs = doe.lhs(n_free_pars, samples=global_start, criterion='c')
             # Scale and store lhs samples for parameters between min and max bounds
-            par_vals = dict();
+            par_vals = dict()
             for par, i in zip(free_pars, range(n_free_pars)):
-                par_min = self.parameter_data[par]['Minimum'].display_data();
-                par_max = self.parameter_data[par]['Maximum'].display_data();                                
-                par_vals[par] = (lhs[:,i]*(par_max-par_min)+par_min).tolist();
+                par_min = self.parameter_data[par]['Minimum'].display_data()
+                par_max = self.parameter_data[par]['Maximum'].display_data()
+                log_min = np.log10(par_min)
+                log_max = np.log10(par_max)
+                par_vals[par] = (np.power(10, log_min + lhs[:, i] * (log_max - log_min))).tolist()
                 # Add initial value guesses if wanted
                 if use_initial_values:
                     par_vals[par].append(self.parameter_data[par]['Value'].display_data())
             # Estimate for each sample
-            J = float('inf');
-            RMSE_com = float('inf')
-            par_best = dict();
+            J = float('inf')
+            par_best = dict()
             glo_est_data = dict()
             if use_initial_values:
-                iterations = range(global_start+1)
+                iterations = range(global_start + 1)
             else:
                 iterations = range(global_start)
             for i in iterations:
@@ -1141,34 +1142,31 @@ class Modelica(_Model, utility._FMU, utility._Building):
                 # Set lhs sample values for each parameter
                 for par in par_vals.keys():
                     # Use latin hypercube selections
-                    self.parameter_data[par]['Value'].set_data(par_vals[par][i]);
+                    self.parameter_data[par]['Value'].set_data(par_vals[par][i])
                     glo_est_data[i][par] = par_vals[par][i]
                 # Make estimate for iteration
-                self._parameter_estimate_method._estimate(self);
+                self._parameter_estimate_method._estimate(self)
                 # Validate estimate for iteration
-                self.validate(start_time, final_time, 'validate', plot = 0);
-                rmse_sum=0
+                self.validate(start_time, final_time, 'validate', plot=0)
                 # Save RMSE for initial_guess
                 for key in self.RMSE:
-                    glo_est_data[i]['RMSE_{0}'.format(key)] = self.RMSE[key].display_data();
-                    rmse_sum=rmse_sum+self.RMSE[key].display_data()
-                glo_est_data[i]['RMSE_sum']=rmse_sum
+                    glo_est_data[i]['RMSE_{0}'.format(key)] = self.RMSE[key].display_data()
                 # If solve succeeded, compare objective and if less, save best par values
                 solver_message = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[0]
                 J_curr = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[2]
                 glo_est_data[i]['Message'] = solver_message
                 glo_est_data[i]['J'] = J_curr
-                if ((rmse_sum < RMSE_com) and (rmse_sum >= 0.0)):
-                    RMSE_com = rmse_sum;
+                if ((J_curr < J) and (J_curr > 0.0)) or ((J_curr < J) and (solver_message == 'Solve_Succeeded')):
+                    J = J_curr
                     for par in free_pars:
-                        par_best[par] = self.parameter_data[par]['Value'].display_data();
+                        par_best[par] = self.parameter_data[par]['Value'].display_data()
             # Save all estimates
-            glo_est_data['RMSE_Best'] = RMSE_com
+            glo_est_data['J_Best'] = J
             self.glo_est_data = glo_est_data
             # Set best parameters in model if found
             if par_best:
-                for par in free_pars:
-                    self.parameter_data[par]['Value'].set_data(par_best[par]);
+                for par in par_vals.keys():
+                    self.parameter_data[par]['Value'].set_data(par_best[par])
         
     def state_estimate(self, start_time, final_time, measurement_variable_list):
         '''Estimate the states of the model.
