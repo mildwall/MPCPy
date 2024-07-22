@@ -1186,7 +1186,7 @@ class WeatherFromEPW(_Weather):
         start_year = self.start_time.year
         end_year = self.final_time.year
         if start_year != end_year:
-            years = range(start_year + 1, end_year + 1)
+            years = range(start_year, end_year + 1)
             df_multi_year_list = []
             for year in years:
                 df_copy = df_epw.copy()
