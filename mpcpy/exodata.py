@@ -1182,6 +1182,19 @@ class WeatherFromEPW(_Weather):
         df_epw['Time'] = str(self.start_time.year) + ' ' + df_epw['Month'].apply(str) + ' ' + df_epw['Day'].apply(str) + ' ' + df_epw['Hour'].apply(str) + ':00';
         time = pd.to_datetime(df_epw['Time'], format= '%Y %m %d %H:%M');
         df_epw.set_index(time, inplace=True);
+        # Duplicate the data for the required number of years
+        start_year = self.start_time.year
+        end_year = self.final_time.year
+        if start_year != end_year:
+            years = range(start_year + 1, end_year + 1)
+            df_multi_year_list = []
+            for year in years:
+                df_copy = df_epw.copy()
+                df_copy.index = df_copy.index + pd.DateOffset(years=year - start_year)
+                df_multi_year_list.append(df_copy)
+
+            df_epw = pd.concat(df_multi_year_list)
+            df_epw.index.name = 'Time'
         # Remove unneeded columns
         df_epw = df_epw.drop(['Time', 'Year', 'Month', 'Day', 'Hour', 'Second', 'Unknown'], axis = 1);
         #  Perform data swap for epw (see Buildings.BoundaryConditions.WeatherData.ReaderTMY3 info)  
