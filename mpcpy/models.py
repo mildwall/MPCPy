@@ -1027,146 +1027,151 @@ class Modelica(_Model, utility._FMU, utility._Building):
         self.set_state_estimate_method(state_estimate_method);
         self.set_validate_method(validate_method);
         
-    def parameter_estimate(self, start_time, final_time, measurement_variable_list, global_start=0, seed=None, use_initial_values=True):
-        '''Estimate the parameters of the model.
-        
-        The estimation of the parameters is based on the data in the 
-        ``'Measured'`` key in the measurements dictionary attribute, 
-        the parameter_data dictionary attribute, and any exodata inputs.
-        
-        An optional global start algorithm where multiple estimations are 
-        preformed with different initial guesses within the ranges of each 
-        free parameter provided.  It is implemented as tested in 
-        Blum et al. (2019).  The algorithm uses latin hypercube sampling 
-        to choose the initial parameter guess values for each iteration and 
-        the iteration with the lowest estimation problem objective value is 
-        chosen.  A user-provided guess is included by default using initial
-        values given to parameter data of the model, though this option can be 
-        turned off to use only sampled initial guesses.
-        
-        Blum, D.H., Arendt, K., Rivalin, L., Piette, M.A., Wetter, M., and 
-        Veje, C.T. (2019). "Practical factors of envelope model setup and 
-        their effects on the performance of model predictive control for 
-        building heating, ventilating, and air conditioning systems." 
-        Applied Energy 236, 410-425. 
-        https://doi.org/10.1016/j.apenergy.2018.11.093
-        
-        Parameters
-        ----------
-        start_time : string
-            Start time of estimation period.
-            Setting to 'continue' will result in error.
-        final_time : string
-            Final time of estimation period.
-        measurement_variable_list : list
-            List of strings defining for which variables defined in the 
-            measurements dictionary attirubute the estimation will 
-            try to minimize the error.
-        global_start : int, optional
-            Number of iterations of a global start algorithm.
-            If 0, the global start algorithm is disabled and the values in
-            the parameter_data dictionary are used as initial guesses.
-            Default is 0.
-        seed : numeric or None, optional
-            Specific seed of the global start algorithm for the random selection
-            of initial value guesses.
-            Default is None.
-        use_initial_values : boolean, optional
-            True to include initial parameter values in the estimation iterations.
-            Default is True.
+def parameter_estimate(self, start_time, final_time, measurement_variable_list, global_start=0, seed=None, use_initial_values=True, scale='normal'):
+    '''Estimate the parameters of the model.
+    
+    The estimation of the parameters is based on the data in the 
+    ``'Measured'`` key in the measurements dictionary attribute, 
+    the parameter_data dictionary attribute, and any exodata inputs.
+    
+    An optional global start algorithm where multiple estimations are 
+    performed with different initial guesses within the ranges of each 
+    free parameter provided.  It is implemented as tested in 
+    Blum et al. (2019).  The algorithm uses latin hypercube sampling 
+    to choose the initial parameter guess values for each iteration and 
+    the iteration with the lowest estimation problem objective value is 
+    chosen.  A user-provided guess is included by default using initial
+    values given to parameter data of the model, though this option can be 
+    turned off to use only sampled initial guesses.
+    
+    Blum, D.H., Arendt, K., Rivalin, L., Piette, M.A., Wetter, M., and 
+    Veje, C.T. (2019). "Practical factors of envelope model setup and 
+    their effects on the performance of model predictive control for 
+    building heating, ventilating, and air conditioning systems." 
+    Applied Energy 236, 410-425. 
+    https://doi.org/10.1016/j.apenergy.2018.11.093
+    
+    Parameters
+    ----------
+    start_time : string
+        Start time of estimation period.
+        Setting to 'continue' will result in error.
+    final_time : string
+        Final time of estimation period.
+    measurement_variable_list : list
+        List of strings defining for which variables defined in the 
+        measurements dictionary attribute the estimation will 
+        try to minimize the error.
+    global_start : int, optional
+        Number of iterations of a global start algorithm.
+        If 0, the global start algorithm is disabled and the values in
+        the parameter_data dictionary are used as initial guesses.
+        Default is 0.
+    seed : numeric or None, optional
+        Specific seed of the global start algorithm for the random selection
+        of initial value guesses.
+        Default is None.
+    use_initial_values : boolean, optional
+        True to include initial parameter values in the estimation iterations.
+        Default is True.
+    scale : string, optional
+        Scale to use for LHS, either 'normal' or 'log'.
+        Default is 'normal'.
 
-        Yields
-        ------
-        Updates the ``'Value'`` key for each estimated parameter in the 
-        parameter_data attribute.
-
-        '''
-        
-        # Check for free parameters
-        free = False;
-        for key in self.parameter_data.keys():
-            if self.parameter_data[key]['Free'].get_base_data():
-                free = True
-                break
-            else:
-                free = False
-        if not free:
-            # If none free raise error
-            raise ValueError('No parameters set as "Free" in parameter_data dictionary. Cannot run parameter estimation.')
-        # Check for measurements
-        for meas in measurement_variable_list:
-            if meas not in self.measurements.keys():
-                raise ValueError('Measurement {0} defined in measurement_variable_list not defined in measurements dictionary.'.format(meas))
-        # Check for continue
-        if start_time == 'continue':
-            raise ValueError('"continue" is not a valid entry for start_time for parameter estimation problems.')
-        # Perform parameter estimation
-        self._set_time_interval(start_time, final_time)
-        self.measurement_variable_list = measurement_variable_list
-        # Without global start
-        if not global_start:
-            self._parameter_estimate_method._estimate(self)
-        # With global start
+    Yields
+    ------
+    Updates the ``'Value'`` key for each estimated parameter in the 
+    parameter_data attribute.
+    '''
+    
+    # Check for free parameters
+    free = False
+    for key in self.parameter_data.keys():
+        if self.parameter_data[key]['Free'].get_base_data():
+            free = True
+            break
         else:
-            # Detect free parameters
-            free_pars = []
-            for par in self.parameter_data.keys():
-                if self.parameter_data[par]['Free'].display_data():
-                    free_pars.append(par)
-            # Create lhs sample for all parameters
-            np.random.seed(seed)  # Random seed for LHS initialization
-            n_free_pars = len(free_pars)
-            lhs = doe.lhs(n_free_pars, samples=global_start, criterion='c')
-            # Scale and store lhs samples for parameters between min and max bounds
-            par_vals = dict()
-            for par, i in zip(free_pars, range(n_free_pars)):
-                par_min = self.parameter_data[par]['Minimum'].display_data()
-                par_max = self.parameter_data[par]['Maximum'].display_data()
+            free = False
+    if not free:
+        # If none free raise error
+        raise ValueError('No parameters set as "Free" in parameter_data dictionary. Cannot run parameter estimation.')
+    # Check for measurements
+    for meas in measurement_variable_list:
+        if meas not in self.measurements.keys():
+            raise ValueError('Measurement {0} defined in measurement_variable_list not defined in measurements dictionary.'.format(meas))
+    # Check for continue
+    if start_time == 'continue':
+        raise ValueError('"continue" is not a valid entry for start_time for parameter estimation problems.')
+    # Perform parameter estimation
+    self._set_time_interval(start_time, final_time)
+    self.measurement_variable_list = measurement_variable_list
+    # Without global start
+    if not global_start:
+        self._parameter_estimate_method._estimate(self)
+    # With global start
+    else:
+        # Detect free parameters
+        free_pars = []
+        for par in self.parameter_data.keys():
+            if self.parameter_data[par]['Free'].display_data():
+                free_pars.append(par)
+        # Create lhs sample for all parameters
+        np.random.seed(seed)  # Random seed for LHS initialization
+        n_free_pars = len(free_pars)
+        lhs = doe.lhs(n_free_pars, samples=global_start, criterion='c')
+        # Scale and store lhs samples for parameters between min and max bounds
+        par_vals = dict()
+        for par, i in zip(free_pars, range(n_free_pars)):
+            par_min = self.parameter_data[par]['Minimum'].display_data()
+            par_max = self.parameter_data[par]['Maximum'].display_data()
+            if scale == 'log':
                 log_min = np.log10(par_min)
                 log_max = np.log10(par_max)
                 par_vals[par] = (np.power(10, log_min + lhs[:, i] * (log_max - log_min))).tolist()
-                # Add initial value guesses if wanted
-                if use_initial_values:
-                    par_vals[par].append(self.parameter_data[par]['Value'].display_data())
-            # Estimate for each sample
-            J = float('inf')
-            par_best = dict()
-            glo_est_data = dict()
-            if use_initial_values:
-                iterations = range(global_start + 1)
             else:
-                iterations = range(global_start)
-            for i in iterations:
-                # Create dictionary to save all estimation iteration data
-                glo_est_data[i] = dict()
-                # Set lhs sample values for each parameter
-                for par in par_vals.keys():
-                    # Use latin hypercube selections
-                    self.parameter_data[par]['Value'].set_data(par_vals[par][i])
-                    glo_est_data[i][par] = par_vals[par][i]
-                # Make estimate for iteration
-                self._parameter_estimate_method._estimate(self)
-                # Validate estimate for iteration
-                self.validate(start_time, final_time, 'validate', plot=0)
-                # Save RMSE for initial_guess
-                for key in self.RMSE:
-                    glo_est_data[i]['RMSE_{0}'.format(key)] = self.RMSE[key].display_data()
-                # If solve succeeded, compare objective and if less, save best par values
-                solver_message = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[0]
-                J_curr = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[2]
-                glo_est_data[i]['Message'] = solver_message
-                glo_est_data[i]['J'] = J_curr
-                if ((J_curr < J) and (J_curr > 0.0)) or ((J_curr < J) and (solver_message == 'Solve_Succeeded')):
-                    J = J_curr
-                    for par in free_pars:
-                        par_best[par] = self.parameter_data[par]['Value'].display_data()
-            # Save all estimates
-            glo_est_data['J_Best'] = J
-            self.glo_est_data = glo_est_data
-            # Set best parameters in model if found
-            if par_best:
-                for par in par_vals.keys():
-                    self.parameter_data[par]['Value'].set_data(par_best[par])
+                par_vals[par] = (par_min + lhs[:, i] * (par_max - par_min)).tolist()
+            # Add initial value guesses if wanted
+            if use_initial_values:
+                par_vals[par].append(self.parameter_data[par]['Value'].display_data())
+        # Estimate for each sample
+        J = float('inf')
+        par_best = dict()
+        glo_est_data = dict()
+        if use_initial_values:
+            iterations = range(global_start + 1)
+        else:
+            iterations = range(global_start)
+        for i in iterations:
+            # Create dictionary to save all estimation iteration data
+            glo_est_data[i] = dict()
+            # Set lhs sample values for each parameter
+            for par in par_vals.keys():
+                # Use latin hypercube selections
+                self.parameter_data[par]['Value'].set_data(par_vals[par][i])
+                glo_est_data[i][par] = par_vals[par][i]
+            # Make estimate for iteration
+            self._parameter_estimate_method._estimate(self)
+            # Validate estimate for iteration
+            self.validate(start_time, final_time, 'validate', plot=0)
+            # Save RMSE for initial_guess
+            for key in self.RMSE:
+                glo_est_data[i]['RMSE_{0}'.format(key)] = self.RMSE[key].display_data()
+            # If solve succeeded, compare objective and if less, save best par values
+            solver_message = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[0]
+            J_curr = self._parameter_estimate_method.opt_problem.get_optimization_statistics()[2]
+            glo_est_data[i]['Message'] = solver_message
+            glo_est_data[i]['J'] = J_curr
+            if ((J_curr < J) and (J_curr > 0.0)) or ((J_curr < J) and (solver_message == 'Solve_Succeeded')):
+                J = J_curr
+                for par in free_pars:
+                    par_best[par] = self.parameter_data[par]['Value'].display_data()
+        # Save all estimates
+        glo_est_data['J_Best'] = J
+        self.glo_est_data = glo_est_data
+        # Set best parameters in model if found
+        if par_best:
+            for par in par_vals.keys():
+                self.parameter_data[par]['Value'].set_data(par_best[par])
         
     def state_estimate(self, start_time, final_time, measurement_variable_list):
         '''Estimate the states of the model.
